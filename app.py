@@ -36,7 +36,7 @@ if "question_lengths" not in st.session_state:
     st.session_state.question_lengths = []
 
 # -----------------------------------
-# 사이드바
+# 사이드바 API 입력
 # -----------------------------------
 st.sidebar.title("🔑 Gemini API 설정")
 
@@ -54,9 +54,9 @@ if api_key:
     try:
         genai.configure(api_key=api_key)
 
-        # 최신 무료 모델
+        # 무료 사용 안정 모델
         model = genai.GenerativeModel(
-            "gemini-2.0-flash"
+            "gemini-1.5-flash"
         )
 
         st.sidebar.success("API 연결 완료")
@@ -87,12 +87,13 @@ def analyze_dependency(text):
         if word in text:
             score += 3
 
-    # 너무 짧은 질문
+    # 짧은 질문 감지
     if len(text) < 8:
         score += 2
 
-    # 너무 빠른 연속 질문
+    # 너무 빠른 질문 감지
     now = time.time()
+
     diff = now - st.session_state.last_time
 
     if diff < 10:
@@ -103,7 +104,7 @@ def analyze_dependency(text):
     return score
 
 # -----------------------------------
-# 위험도 상태
+# 위험도 상태 함수
 # -----------------------------------
 def risk_status(score):
 
@@ -117,7 +118,7 @@ def risk_status(score):
         return "🔴 높음"
 
 # -----------------------------------
-# AI 의존도 표시
+# 사이드바 - 의존도 분석
 # -----------------------------------
 st.sidebar.markdown("---")
 st.sidebar.title("📊 AI 의존도 분석")
@@ -143,7 +144,7 @@ st.sidebar.metric(
 )
 
 # -----------------------------------
-# 평균 질문 수준
+# 질문 수준 분석
 # -----------------------------------
 if st.session_state.question_lengths:
 
@@ -206,7 +207,7 @@ if reflection_score == 4:
 elif reflection_score >= 2:
 
     st.sidebar.info(
-        "💡 AI를 참고하되 스스로 사고하는 습관을 유지해보세요."
+        "💡 AI를 참고하되 스스로 사고해보세요."
     )
 
 else:
@@ -253,8 +254,13 @@ user_input = st.chat_input(
 # -----------------------------------
 if user_input:
 
+    # API 키 없을 경우
     if not api_key:
-        st.error("Gemini API Key를 입력해주세요.")
+
+        st.error(
+            "Gemini API Key를 입력해주세요."
+        )
+
         st.stop()
 
     # 사용자 메시지 저장
@@ -280,7 +286,9 @@ if user_input:
         user_input
     )
 
-    st.session_state.risk_score += added_score
+    st.session_state.risk_score += (
+        added_score
+    )
 
     # -----------------------------------
     # 위험 경고
@@ -292,7 +300,7 @@ if user_input:
         st.warning("""
 🚨 AI 의존도가 높아지고 있습니다.
 
-정답을 빠르게 얻는 것도 좋지만,
+정답을 바로 얻는 것도 좋지만,
 스스로 사고하는 과정 역시 중요합니다.
 
 잠시 직접 고민해보는 시간을 가져보세요 🙂
@@ -312,11 +320,11 @@ if user_input:
                     "좋아요! 스스로 사고하려는 과정이 중요합니다."
                 )
 
-        # 잠시 생각 시간 제공
+        # 잠시 생각 시간
         with st.spinner(
-            "⏳ 잠시 스스로 생각해보는 시간을 가져보세요..."
+            "⏳ 잠시 스스로 생각해보는 중..."
         ):
-            time.sleep(3)
+            time.sleep(2)
 
     elif st.session_state.risk_score >= 5:
 
@@ -328,27 +336,31 @@ if user_input:
 """)
 
     # -----------------------------------
-    # Gemini 응답 생성
+    # Gemini 프롬프트
     # -----------------------------------
     prompt = f"""
-당신은 자기주도 학습을 돕는 AI 튜터입니다.
+친절한 학습 도우미처럼 답하세요.
+사용자가 스스로 생각할 수 있도록 유도하세요.
 
-규칙:
-- 정답만 짧게 주지 말 것
-- 사용자가 스스로 생각할 수 있게 유도할 것
-- 친절하고 교육적으로 설명할 것
-- 사고 과정을 강조할 것
-
-사용자 질문:
+질문:
 {user_input}
 """
 
+    # -----------------------------------
+    # Gemini 응답 생성
+    # -----------------------------------
     try:
 
-        with st.spinner("AI가 생각 중입니다..."):
+        with st.spinner(
+            "AI가 답변 생성 중입니다..."
+        ):
 
             response = model.generate_content(
-                prompt
+                prompt,
+                generation_config={
+                    "max_output_tokens": 200,
+                    "temperature": 0.7
+                }
             )
 
             ai_text = response.text
@@ -358,7 +370,7 @@ if user_input:
         ai_text = f"오류 발생: {e}"
 
     # -----------------------------------
-    # AI 메시지 저장
+    # AI 응답 저장
     # -----------------------------------
     st.session_state.messages.append({
         "role": "assistant",
