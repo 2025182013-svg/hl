@@ -1,234 +1,159 @@
-Skip to content
-2025182013-svg
-hl
-Repository navigation
-Code
-Issues
-Pull requests
-Actions
-Projects
-Wiki
-Security and quality
-Insights
-Settings
-Commit fb84f1f
-2025182013-svg
-2025182013-svg
-authored
-on Apr 9
-Verified
-Create app.py
-main
-0 parents  commit 
-fb84f1f
-1 file changed
-
-+227
-Lines changed: 227 additions & 0 deletions
-File tree
-Filter files…
-app.py
-Search within code
- 
-Customizable line height
-The default line height has been increased for improved accessibility. You can choose to enable a more compact line height from the view settings menu.
-
-‎app.py‎
-+227
-Lines changed: 227 additions & 0 deletions
-Original file line number	Diff line number	Diff line change
-@@ -0,0 +1,227 @@
 import streamlit as st
-import requests
-import pandas as pd
-import html
-import re
 from datetime import datetime
-# -----------------------------
-# 기본 설정
-# -----------------------------
-st.set_page_config(page_title="RefNote AI", layout="wide")
-st.title("📚 RefNote AI")
-st.caption("출처 기반 리서치 어시스턴트 (네이버 뉴스 기반)")
-# -----------------------------
-# 세션 상태
-# -----------------------------
-if "history" not in st.session_state:
-    st.session_state.history = {}
-if "current_result" not in st.session_state:
-    st.session_state.current_result = None
-if "news_sort" not in st.session_state:
-    st.session_state.news_sort = "관련도순"
-if "paper_sort" not in st.session_state:
-    st.session_state.paper_sort = "관련도순"
-# -----------------------------
-# 사이드바
-# -----------------------------
-st.sidebar.header("🔑 네이버 API")
-naver_client_id = st.sidebar.text_input("Client ID", type="password")
-naver_client_secret = st.sidebar.text_input("Client Secret", type="password")
-st.sidebar.markdown("---")
-st.sidebar.header("📂 리서치 기록")
-for k in st.session_state.history:
-    if st.sidebar.button(k):
-        st.session_state.current_result = st.session_state.history[k]
-# -----------------------------
-# 입력
-# -----------------------------
-topic = st.text_input("어떤 주제로 자료를 준비하나요?")
-task_type = st.selectbox("과제 유형", ["논문", "발표"])
-# -----------------------------
-# 텍스트 정리
-# -----------------------------
-def clean_text(text):
-    text = re.sub(r"<.*?>", "", text)
-    return html.unescape(text).strip()
-def parse_date(pub_date):
-    try:
-        dt = datetime.strptime(pub_date, "%a, %d %b %Y %H:%M:%S %z")
-        return dt.strftime("%Y-%m-%d")
-    except:
-        return pub_date
-# -----------------------------
-# 🔥 AI 없이 리서치 질문 생성
-# -----------------------------
-def generate_questions(topic):
-    return [
-        f"{topic}의 주요 개념과 특징은 무엇인가?",
-        f"{topic}이 사회/교육에 미치는 영향은 무엇인가?",
-        f"{topic}과 관련된 정책 또는 개선 방향은 무엇인가?"
-    ]
-# -----------------------------
-# 🔥 키워드 추출
-# -----------------------------
-def extract_keywords(topic):
-    words = re.split(r"[ ,]", topic)
-    words = [w for w in words if len(w) > 1]
-    return list(dict.fromkeys(words))[:5]
-# -----------------------------
-# 🔥 연구 동향 (템플릿 기반)
-# -----------------------------
-def generate_trend(topic):
-    return f"""
-최근 {topic} 관련 연구에서는 해당 주제의 사회적 영향과 정책적 중요성이 강조되고 있습니다.
-특히 교육, 복지, 인식 변화와의 연관성이 주요하게 다뤄지고 있으며,
-실질적인 개선 방안과 제도적 지원의 필요성이 지속적으로 제기되고 있습니다.
-"""
-# -----------------------------
-# 네이버 뉴스 검색
-# -----------------------------
-def search_news(keywords):
-    url = "https://openapi.naver.com/v1/search/news.json"
-    headers = {
-        "X-Naver-Client-Id": naver_client_id,
-        "X-Naver-Client-Secret": naver_client_secret
-    }
-    results = []
-    for kw in keywords:
-        params = {
-            "query": kw,
-            "display": 30,
-            "sort": "date"
-        }
-        try:
-            res = requests.get(url, headers=headers, params=params)
-            items = res.json().get("items", [])
-        except:
-            continue
-        for item in items:
-            results.append({
-                "제목": clean_text(item["title"]),
-                "요약": clean_text(item["description"]),
-                "출처": item["originallink"],
-                "작성일": parse_date(item["pubDate"])
-            })
-    df = pd.DataFrame(results).drop_duplicates()
-    return df
-# -----------------------------
-# 관련도 계산
-# -----------------------------
-def calc_relevance(df, keywords):
-    df["관련도"] = df["제목"].apply(
-        lambda t: sum(t.count(k) for k in keywords)
-    )
-    return df
-# -----------------------------
-# APA 참고문헌
-# -----------------------------
-def make_apa(df):
-    refs = []
-    for _, r in df.head(10).iterrows():
-        domain = r["출처"].split("/")[2]
-        refs.append(
-            f"{domain}. ({r['작성일']}). {r['제목']}. {r['출처']}"
-        )
-    return refs
-# -----------------------------
-# 실행
-# -----------------------------
-if st.button("🔍 리서치 시작") and topic and naver_client_id:
-    questions = generate_questions(topic)
-    keywords = extract_keywords(topic)
-    trend = generate_trend(topic)
-    news_df = search_news(keywords)
-    news_df = calc_relevance(news_df, keywords)
-    result = {
-        "topic": topic,
-        "task": task_type,
-        "questions": questions,
-        "keywords": keywords,
-        "trend": trend,
-        "news": news_df
-    }
-    label = f"[{task_type}] {topic}"
-    st.session_state.history[label] = result
-    st.session_state.current_result = result
-# -----------------------------
-# 출력
-# -----------------------------
-data = st.session_state.current_result
-if data:
-    st.subheader("🔍 리서치 질문")
-    for q in data["questions"]:
-        st.write("•", q)
-    st.subheader("🔑 키워드")
-    st.write(", ".join(data["keywords"]))
-    st.subheader("🧠 연구 동향")
-    st.write(data["trend"])
-    tab1, tab2 = st.tabs(["📰 뉴스", "📄 논문"])
-    # 뉴스
-    with tab1:
-        st.radio(
-            "정렬",
-            ["관련도순", "최신순"],
-            key="news_sort",
-            horizontal=True
-        )
-        df = data["news"]
-        if not df.empty:
-            if st.session_state.news_sort == "관련도순":
-                df = df.sort_values("관련도", ascending=False)
-            else:
-                df = df.sort_values("작성일", ascending=False)
-            st.dataframe(df.drop(columns=["관련도"]))
-            st.subheader("📎 참고문헌")
-            for r in make_apa(df):
-                st.write(r)
-        else:
-            st.warning("뉴스 없음")
-    # 논문
-    with tab2:
-        st.radio(
-            "정렬",
-            ["관련도순", "최신순"],
-            key="paper_sort",
-            horizontal=True
-        )
-        st.info("논문 API 연동 예정")
-0 commit comments
-Comments
-0
- (0)
-Comment
-You're not receiving notifications from this thread.
+import time
 
+# -----------------------------------
+# 기본 설정
+# -----------------------------------
+st.set_page_config(
+    page_title="ThinkBack AI",
+    layout="centered"
+)
+
+st.title("🧠 ThinkBack AI")
+st.caption("AI 과의존 방지 학습 챗봇")
+
+# -----------------------------------
+# 세션 상태 초기화
+# -----------------------------------
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+
+if "risk_score" not in st.session_state:
+    st.session_state.risk_score = 0
+
+if "question_count" not in st.session_state:
+    st.session_state.question_count = 0
+
+if "last_time" not in st.session_state:
+    st.session_state.last_time = time.time()
+
+# -----------------------------------
+# 과의존 감지 함수
+# -----------------------------------
+def analyze_dependency(text):
+    score = 0
+
+    danger_words = [
+        "답만",
+        "정답",
+        "빨리",
+        "그냥 알려줘",
+        "생각하기 싫어",
+        "숙제 해줘",
+        "대신 해줘",
+        "요약만"
+    ]
+
+    for word in danger_words:
+        if word in text:
+            score += 3
+
+    # 너무 짧은 질문
+    if len(text) < 8:
+        score += 2
+
+    # 연속 질문 감지
+    now = time.time()
+    diff = now - st.session_state.last_time
+
+    if diff < 10:
+        score += 2
+
+    st.session_state.last_time = now
+
+    return score
+
+# -----------------------------------
+# 사이드바
+# -----------------------------------
+st.sidebar.title("📊 AI 의존도 분석")
+
+risk = st.session_state.risk_score
+
+if risk < 5:
+    st.sidebar.success(f"🟢 낮음 ({risk}점)")
+elif risk < 10:
+    st.sidebar.warning(f"🟡 보통 ({risk}점)")
+else:
+    st.sidebar.error(f"🔴 높음 ({risk}점)")
+
+st.sidebar.markdown("---")
+st.sidebar.write(f"총 질문 수: {st.session_state.question_count}")
+
+# -----------------------------------
+# 채팅 기록 출력
+# -----------------------------------
+for msg in st.session_state.messages:
+    with st.chat_message(msg["role"]):
+        st.markdown(msg["content"])
+
+# -----------------------------------
+# 사용자 입력
+# -----------------------------------
+user_input = st.chat_input("질문을 입력하세요")
+
+if user_input:
+
+    # 사용자 메시지 저장
+    st.session_state.messages.append({
+        "role": "user",
+        "content": user_input
+    })
+
+    st.session_state.question_count += 1
+
+    # 위험 점수 계산
+    added_score = analyze_dependency(user_input)
+    st.session_state.risk_score += added_score
+
+    # 사용자 메시지 출력
+    with st.chat_message("user"):
+        st.markdown(user_input)
+
+    # -----------------------------------
+    # 경고 시스템
+    # -----------------------------------
+    if st.session_state.risk_score >= 10:
+        st.warning("""
+🚨 AI 의존도가 높아지고 있습니다.
+
+정답을 바로 얻는 것도 좋지만,
+스스로 사고하는 과정 역시 중요합니다.
+
+잠시 직접 생각해보는 시간을 가져보세요 🙂
+""")
+
+    elif st.session_state.risk_score >= 5:
+        st.info("""
+💡 AI를 활용할 때는
+왜 이런 답이 나왔는지 함께 고민해보세요.
+""")
+
+    # -----------------------------------
+    # AI 응답
+    # -----------------------------------
+    response = f"""
+당신의 질문:
+
+> {user_input}
+
+에 대해 먼저 스스로 생각해볼 수 있는 방향을 추천드립니다.
+
+- 이 문제의 핵심은 무엇인가요?
+- 본인의 생각은 어떤가요?
+- 왜 이런 결과가 나올까요?
+
+AI 답변을 참고하되,
+자신만의 사고 과정을 함께 만들어보세요.
+"""
+
+    # AI 메시지 저장
+    st.session_state.messages.append({
+        "role": "assistant",
+        "content": response
+    })
+
+    # AI 메시지 출력
+    with st.chat_message("assistant"):
+        st.markdown(response)
