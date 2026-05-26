@@ -219,7 +219,7 @@ if user_input:
     try:
         with st.spinner("AI가 답변 생성 중입니다..."):
             response = client.models.generate_content(
-                model="gemini-2.0-flash",
+                model="gemini-1.5-flash",
                 contents=prompt,
                 config=types.GenerateContentConfig(
                     max_output_tokens=200,
