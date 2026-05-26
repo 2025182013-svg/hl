@@ -53,7 +53,7 @@ model = None
 if api_key:
     try:
         genai.configure(api_key=api_key)
-        model = genai.GenerativeModel("gemini-1.5-flash")
+        model = genai.GenerativeModel("gemini-2.0-flash-lite")
         st.sidebar.success("API 연결 완료")
     except Exception as e:
         st.sidebar.error(f"API 오류: {e}")
