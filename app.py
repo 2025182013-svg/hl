@@ -1,6 +1,5 @@
 import streamlit as st
-from google import genai
-from google.genai import types
+import google.generativeai as genai
 import time
 
 # -----------------------------------
@@ -47,13 +46,14 @@ api_key = st.sidebar.text_input(
 )
 
 # -----------------------------------
-# Gemini 클라이언트 생성
+# Gemini 연결
 # -----------------------------------
-client = None
+model = None
 
 if api_key:
     try:
-        client = genai.Client(api_key=api_key)
+        genai.configure(api_key=api_key)
+        model = genai.GenerativeModel("gemini-1.5-flash")
         st.sidebar.success("API 연결 완료")
     except Exception as e:
         st.sidebar.error(f"API 오류: {e}")
@@ -218,10 +218,9 @@ if user_input:
 
     try:
         with st.spinner("AI가 답변 생성 중입니다..."):
-            response = client.models.generate_content(
-                model="gemini-1.5-flash",
-                contents=prompt,
-                config=types.GenerateContentConfig(
+            response = model.generate_content(
+                prompt,
+                generation_config=genai.types.GenerationConfig(
                     max_output_tokens=200,
                     temperature=0.7
                 )
