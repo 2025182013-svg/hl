@@ -1,5 +1,5 @@
 import streamlit as st
-import google.generativeai as genai
+from openai import OpenAI
 import time
 
 # -----------------------------------
@@ -38,22 +38,21 @@ if "question_lengths" not in st.session_state:
 # -----------------------------------
 # 사이드바 API 입력
 # -----------------------------------
-st.sidebar.title("🔑 Gemini API 설정")
+st.sidebar.title("🔑 OpenAI API 설정")
 
 api_key = st.sidebar.text_input(
-    "Gemini API Key 입력",
+    "OpenAI API Key 입력",
     type="password"
 )
 
 # -----------------------------------
-# Gemini 연결
+# OpenAI 클라이언트 생성
 # -----------------------------------
-model = None
+client = None
 
 if api_key:
     try:
-        genai.configure(api_key=api_key)
-        model = genai.GenerativeModel("gemini-2.0-flash-lite")
+        client = OpenAI(api_key=api_key)
         st.sidebar.success("API 연결 완료")
     except Exception as e:
         st.sidebar.error(f"API 오류: {e}")
@@ -171,7 +170,7 @@ user_input = st.chat_input("질문을 입력하세요")
 if user_input:
 
     if not api_key:
-        st.error("Gemini API Key를 입력해주세요.")
+        st.error("OpenAI API Key를 입력해주세요.")
         st.stop()
 
     st.session_state.messages.append({"role": "user", "content": user_input})
@@ -209,34 +208,29 @@ if user_input:
 왜 이런 답이 나왔는지 고민해보세요.
 """)
 
-    prompt = f"""친절한 학습 도우미처럼 답하세요.
-사용자가 스스로 생각할 수 있도록 유도하세요.
-
-질문:
-{user_input}
-"""
-
+    # -----------------------------------
+    # OpenAI 응답 생성 (토큰 최소화)
+    # -----------------------------------
     try:
         with st.spinner("AI가 답변 생성 중입니다..."):
-            response = model.generate_content(
-                prompt,
-                generation_config=genai.types.GenerationConfig(
-                    max_output_tokens=200,
-                    temperature=0.7
-                )
+            response = client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "학습 도우미. 답을 주되 스스로 생각하도록 짧게 유도."
+                    },
+                    {
+                        "role": "user",
+                        "content": user_input
+                    }
+                ],
+                max_tokens=200,
+                temperature=0.7
             )
-            ai_text = response.text
+            ai_text = response.choices[0].message.content
 
     except Exception as e:
         ai_text = f"오류 발생: {e}"
 
-    st.session_state.messages.append({"role": "assistant", "content": ai_text})
-
-    with st.chat_message("assistant"):
-        st.markdown(ai_text)
-
-# -----------------------------------
-# 하단 안내
-# -----------------------------------
-st.markdown("---")
-st.caption("ThinkBack AI · 건강한 AI 활용 습관과 자기주도 학습을 위한 AI 챗봇")
+    st
