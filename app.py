@@ -2,9 +2,6 @@ import streamlit as st
 from openai import OpenAI
 import time
 
-# -----------------------------------
-# 페이지 설정
-# -----------------------------------
 st.set_page_config(
     page_title="ThinkBack AI",
     page_icon="🧠",
@@ -33,8 +30,6 @@ if "question_lengths" not in st.session_state:
 # -----------------------------------
 # 사이드바
 # -----------------------------------
-
-# API 설정
 st.sidebar.title("🔑 API 설정")
 api_key = st.sidebar.text_input("OpenAI API Key", type="password")
 
@@ -46,13 +41,10 @@ if api_key:
     except Exception as e:
         st.sidebar.error(f"오류: {e}")
 
-# 의존도 현황
 st.sidebar.markdown("---")
 st.sidebar.markdown("### 📊 AI 의존도")
 
 score = st.session_state.risk_score
-progress = min(score / 20, 1.0)
-
 if score < 5:
     st.sidebar.success(f"🟢 낮음 · {score}점")
 elif score < 10:
@@ -60,7 +52,7 @@ elif score < 10:
 else:
     st.sidebar.error(f"🔴 높음 · {score}점")
 
-st.sidebar.progress(progress)
+st.sidebar.progress(min(score / 20, 1.0))
 
 col1, col2 = st.sidebar.columns(2)
 col1.metric("총 질문", f"{st.session_state.question_count}개")
@@ -76,7 +68,6 @@ if st.session_state.question_lengths:
         level = "🧠 깊이 있음"
     st.sidebar.caption(f"질문 수준: **{level}**")
 
-# 자기 점검
 st.sidebar.markdown("---")
 st.sidebar.markdown("### 🪞 자기 점검")
 
@@ -86,7 +77,6 @@ checks = [
     st.sidebar.checkbox("내 생각을 먼저 정리했나요?"),
     st.sidebar.checkbox("AI 없이 설명할 수 있나요?"),
 ]
-
 reflection_score = sum(checks)
 st.sidebar.progress(reflection_score / 4)
 
@@ -120,17 +110,6 @@ def analyze_dependency(text):
     return score
 
 # -----------------------------------
-# 위험도 상태 함수
-# -----------------------------------
-def risk_status(score):
-    if score < 5:
-        return "🟢 낮음"
-    elif score < 10:
-        return "🟡 보통"
-    else:
-        return "🔴 높음"
-
-# -----------------------------------
 # 채팅 기록 출력
 # -----------------------------------
 for msg in st.session_state.messages:
@@ -138,7 +117,7 @@ for msg in st.session_state.messages:
         st.markdown(msg["content"])
 
 # -----------------------------------
-# 사용자 입력
+# 사용자 입력 처리
 # -----------------------------------
 user_input = st.chat_input("질문을 입력하세요")
 
@@ -158,10 +137,8 @@ if user_input:
     added_score = analyze_dependency(user_input)
     st.session_state.risk_score += added_score
 
-    # 과의존 경고
     if st.session_state.risk_score >= 10:
         st.session_state.warning_count += 1
-
         st.image("lizard.png", caption="🦎 스스로 생각해보세요!", use_container_width=True)
         st.warning("""
 🚨 AI 의존도가 너무 높아요!
@@ -175,7 +152,6 @@ if user_input:
             my_thought = st.text_area("당신의 생각을 먼저 적어보세요")
             if my_thought:
                 st.success("좋아요! 스스로 사고하려는 과정이 중요합니다.")
-
         with st.spinner("⏳ 잠시 스스로 생각해보는 중..."):
             time.sleep(2)
 
@@ -183,7 +159,9 @@ if user_input:
         st.session_state.warning_count += 1
         st.info("💡 AI 답변을 그대로 복사하기보다 왜 이런 답이 나왔는지 고민해보세요.")
 
-    # OpenAI 응답 생성
+    # -----------------------------------
+    # OpenAI 응답 생성 (대화 이어짐)
+    # -----------------------------------
     try:
         with st.spinner("AI가 답변 생성 중입니다..."):
             recent_messages = st.session_state.messages[-6:]
@@ -209,8 +187,5 @@ if user_input:
     with st.chat_message("assistant"):
         st.markdown(ai_text)
 
-# -----------------------------------
-# 하단 안내
-# -----------------------------------
 st.markdown("---")
 st.caption("ThinkBack AI · 건강한 AI 활용 습관과 자기주도 학습을 위한 AI 챗봇")
