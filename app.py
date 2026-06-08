@@ -6,6 +6,10 @@ import os
 from datetime import datetime
 
 DB_NAME = "thinkback_chat.db"
+LIZARD_IMAGE = "lizard.png"
+
+WARNING_SCORE = 5
+DANGER_SCORE = 8
 
 st.set_page_config(
     page_title="ThinkBack AI",
@@ -13,9 +17,7 @@ st.set_page_config(
     layout="centered"
 )
 
-# -----------------------------
-# DB 함수
-# -----------------------------
+
 def init_db():
     conn = sqlite3.connect(DB_NAME)
     cur = conn.cursor()
@@ -34,8 +36,7 @@ def init_db():
         chat_id INTEGER NOT NULL,
         role TEXT NOT NULL,
         content TEXT NOT NULL,
-        created_at TEXT NOT NULL,
-        FOREIGN KEY(chat_id) REFERENCES chats(id)
+        created_at TEXT NOT NULL
     )
     """)
 
@@ -46,21 +47,26 @@ def init_db():
 def create_chat(title="새 대화"):
     conn = sqlite3.connect(DB_NAME)
     cur = conn.cursor()
+
     cur.execute(
         "INSERT INTO chats (title, created_at) VALUES (?, ?)",
         (title, datetime.now().isoformat())
     )
+
     conn.commit()
     chat_id = cur.lastrowid
     conn.close()
+
     return chat_id
 
 
 def get_chats():
     conn = sqlite3.connect(DB_NAME)
     cur = conn.cursor()
+
     cur.execute("SELECT id, title FROM chats ORDER BY id DESC")
     chats = cur.fetchall()
+
     conn.close()
     return chats
 
@@ -68,33 +74,45 @@ def get_chats():
 def get_messages(chat_id):
     conn = sqlite3.connect(DB_NAME)
     cur = conn.cursor()
+
     cur.execute(
         "SELECT role, content FROM messages WHERE chat_id=? ORDER BY id ASC",
         (chat_id,)
     )
-    messages = [{"role": role, "content": content} for role, content in cur.fetchall()]
+
+    rows = cur.fetchall()
     conn.close()
-    return messages
+
+    return [{"role": role, "content": content} for role, content in rows]
 
 
 def save_message(chat_id, role, content):
     conn = sqlite3.connect(DB_NAME)
     cur = conn.cursor()
+
     cur.execute(
         "INSERT INTO messages (chat_id, role, content, created_at) VALUES (?, ?, ?, ?)",
         (chat_id, role, content, datetime.now().isoformat())
     )
+
     conn.commit()
     conn.close()
 
 
 def update_chat_title(chat_id, title):
+    clean_title = title.strip().replace("\n", " ")
+
+    if len(clean_title) > 25:
+        clean_title = clean_title[:25] + "..."
+
     conn = sqlite3.connect(DB_NAME)
     cur = conn.cursor()
+
     cur.execute(
         "UPDATE chats SET title=? WHERE id=?",
-        (title[:25], chat_id)
+        (clean_title, chat_id)
     )
+
     conn.commit()
     conn.close()
 
@@ -102,43 +120,69 @@ def update_chat_title(chat_id, title):
 def delete_chat(chat_id):
     conn = sqlite3.connect(DB_NAME)
     cur = conn.cursor()
+
     cur.execute("DELETE FROM messages WHERE chat_id=?", (chat_id,))
     cur.execute("DELETE FROM chats WHERE id=?", (chat_id,))
+
     conn.commit()
     conn.close()
 
 
-# -----------------------------
-# 의존도 분석
-# -----------------------------
 def analyze_dependency(text):
     score = 0
+    text = text.strip()
 
     danger_words = [
         "답만", "정답", "빨리", "숙제 해줘",
         "그냥 알려줘", "대신 해줘", "요약만",
         "복붙", "생각하기 싫어", "알아서 해줘",
-        "그냥 써줘", "답 알려줘", "답을 알려달라고"
+        "그냥 써줘", "답 알려줘", "모르겠어",
+        "해줘", "써줘", "풀어줘", "해답",
+        "결론만", "바로 답"
+    ]
+
+    strong_words = [
+        "답만 알려줘",
+        "그냥 답",
+        "답을 알려달라고",
+        "생각하기 싫어",
+        "대신 해줘",
+        "복붙하게",
+        "그냥 써줘",
+        "정답만"
     ]
 
     for word in danger_words:
         if word in text:
-            score += 3
+            score += 4
 
-    if len(text.strip()) < 8:
-        score += 2
+    for word in strong_words:
+        if word in text:
+            score += 6
+
+    if len(text) <= 5:
+        score += 4
+    elif len(text) <= 10:
+        score += 3
 
     now = time.time()
-    if now - st.session_state.last_time < 10:
-        score += 2
+
+    if now - st.session_state.last_time < 15:
+        score += 4
 
     st.session_state.last_time = now
+
     return score
 
 
-# -----------------------------
-# 초기 설정
-# -----------------------------
+def reset_learning_state():
+    st.session_state.risk_score = 0
+    st.session_state.warning_count = 0
+    st.session_state.question_count = 0
+    st.session_state.question_lengths = []
+    st.session_state.last_time = time.time()
+
+
 init_db()
 
 if "current_chat_id" not in st.session_state:
@@ -165,17 +209,13 @@ if "last_time" not in st.session_state:
 
 
 # -----------------------------
-# 사이드바
+# Sidebar: Chat list
 # -----------------------------
-st.sidebar.title("💬 대화")
+st.sidebar.title("💬 대화 목록")
 
-if st.sidebar.button("➕ 새 대화 시작"):
-    new_id = create_chat()
-    st.session_state.current_chat_id = new_id
-    st.session_state.risk_score = 0
-    st.session_state.warning_count = 0
-    st.session_state.question_count = 0
-    st.session_state.question_lengths = []
+if st.sidebar.button("➕ 새 대화 시작", use_container_width=True):
+    st.session_state.current_chat_id = create_chat()
+    reset_learning_state()
     st.rerun()
 
 chats = get_chats()
@@ -183,36 +223,56 @@ chats = get_chats()
 for chat_id, title in chats:
     col1, col2 = st.sidebar.columns([4, 1])
 
-    if col1.button(title, key=f"chat_{chat_id}"):
+    is_current = chat_id == st.session_state.current_chat_id
+    label = f"✅ {title}" if is_current else title
+
+    if col1.button(label, key=f"chat_{chat_id}", use_container_width=True):
         st.session_state.current_chat_id = chat_id
+        reset_learning_state()
         st.rerun()
 
     if col2.button("🗑️", key=f"delete_{chat_id}"):
         delete_chat(chat_id)
-        remaining = get_chats()
-        if remaining:
-            st.session_state.current_chat_id = remaining[0][0]
+        remaining_chats = get_chats()
+
+        if remaining_chats:
+            st.session_state.current_chat_id = remaining_chats[0][0]
         else:
             st.session_state.current_chat_id = create_chat()
+
+        reset_learning_state()
         st.rerun()
 
+
+# -----------------------------
+# Sidebar: API
+# -----------------------------
 st.sidebar.markdown("---")
 st.sidebar.title("🔑 API 설정")
+
 api_key = st.sidebar.text_input("OpenAI API Key", type="password")
 
 client = None
-if api_key:
-    client = OpenAI(api_key=api_key)
-    st.sidebar.success("연결 완료")
 
+if api_key:
+    try:
+        client = OpenAI(api_key=api_key)
+        st.sidebar.success("연결 완료")
+    except Exception as e:
+        st.sidebar.error(f"연결 오류: {e}")
+
+
+# -----------------------------
+# Sidebar: dependency score
+# -----------------------------
 st.sidebar.markdown("---")
 st.sidebar.markdown("### 📊 AI 의존도")
 
 score = st.session_state.risk_score
 
-if score < 5:
+if score < WARNING_SCORE:
     st.sidebar.success(f"🟢 낮음 · {score}점")
-elif score < 10:
+elif score < DANGER_SCORE:
     st.sidebar.warning(f"🟡 보통 · {score}점")
 else:
     st.sidebar.error(f"🔴 높음 · {score}점")
@@ -223,17 +283,32 @@ col1, col2 = st.sidebar.columns(2)
 col1.metric("총 질문", f"{st.session_state.question_count}개")
 col2.metric("경고 횟수", f"{st.session_state.warning_count}회")
 
+if st.session_state.question_lengths:
+    avg_len = sum(st.session_state.question_lengths) / len(st.session_state.question_lengths)
+
+    if avg_len < 10:
+        level = "📝 짧음"
+    elif avg_len < 30:
+        level = "💬 보통"
+    else:
+        level = "🧠 깊이 있음"
+
+    st.sidebar.caption(f"질문 수준: **{level}**")
+
+
+# -----------------------------
+# Sidebar: self-check
+# -----------------------------
 st.sidebar.markdown("---")
 st.sidebar.markdown("### 🪞 자기 점검")
 
-checks = [
-    st.sidebar.checkbox("답변을 읽고 다시 생각했나요?"),
-    st.sidebar.checkbox("답만 복사하지 않았나요?"),
-    st.sidebar.checkbox("내 생각을 먼저 정리했나요?"),
-    st.sidebar.checkbox("AI 없이 설명할 수 있나요?"),
-]
+check1 = st.sidebar.checkbox("답변을 읽고 다시 생각했나요?")
+check2 = st.sidebar.checkbox("답만 복사하지 않았나요?")
+check3 = st.sidebar.checkbox("내 생각을 먼저 정리했나요?")
+check4 = st.sidebar.checkbox("AI 없이 설명할 수 있나요?")
 
-reflection_score = sum(checks)
+reflection_score = sum([check1, check2, check3, check4])
+
 st.sidebar.progress(reflection_score / 4)
 
 if reflection_score == 4:
@@ -245,7 +320,7 @@ else:
 
 
 # -----------------------------
-# 메인 화면
+# Main page
 # -----------------------------
 st.title("🧠 ThinkBack AI")
 st.caption("AI 과의존 방지 자기주도 학습 챗봇")
@@ -263,15 +338,15 @@ if user_input:
         st.error("OpenAI API Key를 입력해주세요.")
         st.stop()
 
-    current_chat_id = st.session_state.current_chat_id
+    chat_id = st.session_state.current_chat_id
 
-    save_message(current_chat_id, "user", user_input)
+    save_message(chat_id, "user", user_input)
 
-    existing_messages = get_messages(current_chat_id)
-    user_messages = [m for m in existing_messages if m["role"] == "user"]
+    current_messages = get_messages(chat_id)
+    user_messages = [m for m in current_messages if m["role"] == "user"]
 
     if len(user_messages) == 1:
-        update_chat_title(current_chat_id, user_input)
+        update_chat_title(chat_id, user_input)
 
     st.session_state.question_count += 1
     st.session_state.question_lengths.append(len(user_input))
@@ -282,40 +357,42 @@ if user_input:
     added_score = analyze_dependency(user_input)
     st.session_state.risk_score += added_score
 
-    if st.session_state.risk_score >= 10:
+    if st.session_state.risk_score >= DANGER_SCORE:
         st.session_state.warning_count += 1
 
-        if os.path.exists("assets/lizard.png"):
+        if os.path.exists(LIZARD_IMAGE):
             st.image(
-                "assets/lizard.png",
-                caption="🦎 스스로 생각해보세요!",
+                LIZARD_IMAGE,
+                caption="🦎 잠깐! 스스로 생각해볼 시간이에요.",
                 use_container_width=True
             )
+        else:
+            st.warning("lizard.png 파일을 app.py와 같은 폴더에 넣어주세요.")
 
-        st.warning("""
-🚨 AI 의존도가 너무 높아요!
+        st.error("""
+🚨 AI 의존도가 높아졌어요!
 
-답을 바로 받는 것보다  
-스스로 고민하는 과정이 훨씬 중요합니다.
-
-잠깐, 먼저 혼자 생각해볼까요? 🙂
+지금은 답을 바로 받기보다 먼저 스스로 생각해보는 시간이 필요합니다.  
+아래 칸에 내 생각을 한 줄이라도 적어본 뒤 다시 질문해보세요.
 """)
 
-        with st.expander("✍️ 내 생각 먼저 적어보기"):
-            my_thought = st.text_area("당신의 생각을 먼저 적어보세요")
+        with st.expander("✍️ 내 생각 먼저 적어보기", expanded=True):
+            my_thought = st.text_area("내가 생각한 답이나 풀이 방향")
             if my_thought:
                 st.success("좋아요! 스스로 사고하려는 과정이 중요합니다.")
 
-        with st.spinner("⏳ 잠시 스스로 생각해보는 중..."):
-            time.sleep(2)
-
-    elif st.session_state.risk_score >= 5:
+    elif st.session_state.risk_score >= WARNING_SCORE:
         st.session_state.warning_count += 1
-        st.info("💡 AI 답변을 그대로 복사하기보다 왜 이런 답이 나왔는지 고민해보세요.")
+
+        st.warning("""
+💡 AI 의존도가 조금 올라갔어요.
+
+답을 그대로 받기보다 먼저 내 생각을 적어보면 좋아요.
+""")
 
     try:
         with st.spinner("AI가 답변 생성 중입니다..."):
-            recent_messages = get_messages(current_chat_id)[-12:]
+            recent_messages = get_messages(chat_id)[-12:]
 
             response = client.chat.completions.create(
                 model="gpt-4o-mini",
@@ -328,7 +405,7 @@ if user_input:
                             "사용자가 '그거', '아니', '답만', '방금 것', '알려줘'처럼 짧게 말하면 "
                             "직전 질문과 대화 흐름을 기준으로 이해해. "
                             "처음에는 정답을 바로 알려주기보다 힌트와 사고 과정을 유도해. "
-                            "하지만 사용자가 이미 답을 요구했거나 반복해서 물으면, "
+                            "하지만 사용자가 이미 답을 요구했거나 반복해서 물으면 "
                             "이전 질문을 기준으로 짧게 답을 알려주고 이유를 한 문장으로 설명해. "
                             "절대 이전 대화를 모른다고 말하지 마. "
                             "답변은 짧고 친절한 한국어로 해."
@@ -345,7 +422,7 @@ if user_input:
     except Exception as e:
         ai_text = f"오류 발생: {e}"
 
-    save_message(current_chat_id, "assistant", ai_text)
+    save_message(chat_id, "assistant", ai_text)
 
     with st.chat_message("assistant"):
         st.markdown(ai_text)
