@@ -56,7 +56,6 @@ def create_chat(title="새 대화"):
     conn.commit()
     chat_id = cur.lastrowid
     conn.close()
-
     return chat_id
 
 
@@ -171,7 +170,6 @@ def analyze_dependency(text):
         score += 4
 
     st.session_state.last_time = now
-
     return score
 
 
@@ -181,6 +179,7 @@ def reset_learning_state():
     st.session_state.question_count = 0
     st.session_state.question_lengths = []
     st.session_state.last_time = time.time()
+    st.session_state.show_lizard = False
 
 
 init_db()
@@ -207,10 +206,10 @@ if "question_lengths" not in st.session_state:
 if "last_time" not in st.session_state:
     st.session_state.last_time = time.time()
 
+if "show_lizard" not in st.session_state:
+    st.session_state.show_lizard = False
 
-# -----------------------------
-# Sidebar: Chat list
-# -----------------------------
+
 st.sidebar.title("💬 대화 목록")
 
 if st.sidebar.button("➕ 새 대화 시작", use_container_width=True):
@@ -244,9 +243,6 @@ for chat_id, title in chats:
         st.rerun()
 
 
-# -----------------------------
-# Sidebar: API
-# -----------------------------
 st.sidebar.markdown("---")
 st.sidebar.title("🔑 API 설정")
 
@@ -262,9 +258,6 @@ if api_key:
         st.sidebar.error(f"연결 오류: {e}")
 
 
-# -----------------------------
-# Sidebar: dependency score
-# -----------------------------
 st.sidebar.markdown("---")
 st.sidebar.markdown("### 📊 AI 의존도")
 
@@ -296,9 +289,6 @@ if st.session_state.question_lengths:
     st.sidebar.caption(f"질문 수준: **{level}**")
 
 
-# -----------------------------
-# Sidebar: self-check
-# -----------------------------
 st.sidebar.markdown("---")
 st.sidebar.markdown("### 🪞 자기 점검")
 
@@ -319,11 +309,31 @@ else:
     st.sidebar.warning("⚠️ 의존도가 높아질 수 있어요")
 
 
-# -----------------------------
-# Main page
-# -----------------------------
 st.title("🧠 ThinkBack AI")
 st.caption("AI 과의존 방지 자기주도 학습 챗봇")
+
+if st.session_state.show_lizard:
+    if os.path.exists(LIZARD_IMAGE):
+        st.image(
+            LIZARD_IMAGE,
+            caption="🦎 잠깐! 스스로 생각해볼 시간이에요.",
+            use_container_width=True
+        )
+    else:
+        st.warning("lizard.png 파일을 app.py와 같은 폴더에 넣어주세요.")
+
+    st.error("""
+🚨 AI 의존도가 높아졌어요!
+
+지금은 답을 바로 받기보다 먼저 스스로 생각해보는 시간이 필요합니다.  
+아래 칸에 내 생각을 한 줄이라도 적어본 뒤 다시 질문해보세요.
+""")
+
+    with st.expander("✍️ 내 생각 먼저 적어보기", expanded=True):
+        my_thought = st.text_area("내가 생각한 답이나 풀이 방향")
+        if my_thought:
+            st.success("좋아요! 스스로 사고하려는 과정이 중요합니다.")
+
 
 messages = get_messages(st.session_state.current_chat_id)
 
@@ -358,32 +368,11 @@ if user_input:
     st.session_state.risk_score += added_score
 
     if st.session_state.risk_score >= DANGER_SCORE:
+        st.session_state.show_lizard = True
         st.session_state.warning_count += 1
-
-        if os.path.exists(LIZARD_IMAGE):
-            st.image(
-                LIZARD_IMAGE,
-                caption="🦎 잠깐! 스스로 생각해볼 시간이에요.",
-                use_container_width=True
-            )
-        else:
-            st.warning("lizard.png 파일을 app.py와 같은 폴더에 넣어주세요.")
-
-        st.error("""
-🚨 AI 의존도가 높아졌어요!
-
-지금은 답을 바로 받기보다 먼저 스스로 생각해보는 시간이 필요합니다.  
-아래 칸에 내 생각을 한 줄이라도 적어본 뒤 다시 질문해보세요.
-""")
-
-        with st.expander("✍️ 내 생각 먼저 적어보기", expanded=True):
-            my_thought = st.text_area("내가 생각한 답이나 풀이 방향")
-            if my_thought:
-                st.success("좋아요! 스스로 사고하려는 과정이 중요합니다.")
 
     elif st.session_state.risk_score >= WARNING_SCORE:
         st.session_state.warning_count += 1
-
         st.warning("""
 💡 AI 의존도가 조금 올라갔어요.
 
