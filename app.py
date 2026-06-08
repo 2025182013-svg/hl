@@ -11,9 +11,6 @@ st.set_page_config(
 st.title("🧠 ThinkBack AI")
 st.caption("AI 과의존 방지 자기주도 학습 챗봇")
 
-# -----------------------------------
-# 세션 상태 초기화
-# -----------------------------------
 if "messages" not in st.session_state:
     st.session_state.messages = []
 if "risk_score" not in st.session_state:
@@ -27,9 +24,7 @@ if "last_time" not in st.session_state:
 if "question_lengths" not in st.session_state:
     st.session_state.question_lengths = []
 
-# -----------------------------------
 # 사이드바
-# -----------------------------------
 st.sidebar.title("🔑 API 설정")
 api_key = st.sidebar.text_input("OpenAI API Key", type="password")
 
@@ -87,9 +82,7 @@ elif reflection_score >= 2:
 else:
     st.sidebar.warning("⚠️ 의존도가 높아질 수 있어요")
 
-# -----------------------------------
-# 과의존 분석 함수
-# -----------------------------------
+
 def analyze_dependency(text):
     score = 0
     danger_words = [
@@ -109,16 +102,12 @@ def analyze_dependency(text):
     st.session_state.last_time = now
     return score
 
-# -----------------------------------
+
 # 채팅 기록 출력
-# -----------------------------------
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-# -----------------------------------
-# 사용자 입력 처리
-# -----------------------------------
 user_input = st.chat_input("질문을 입력하세요")
 
 if user_input:
@@ -159,9 +148,6 @@ if user_input:
         st.session_state.warning_count += 1
         st.info("💡 AI 답변을 그대로 복사하기보다 왜 이런 답이 나왔는지 고민해보세요.")
 
-    # -----------------------------------
-    # OpenAI 응답 생성 (대화 이어짐)
-    # -----------------------------------
     try:
         with st.spinner("AI가 답변 생성 중입니다..."):
             recent_messages = st.session_state.messages[-6:]
