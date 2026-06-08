@@ -66,7 +66,8 @@ def analyze_dependency(text):
     danger_words = [
         "답만", "정답", "빨리", "숙제 해줘",
         "그냥 알려줘", "대신 해줘", "요약만",
-        "복붙", "생각하기 싫어"
+        "복붙", "생각하기 싫어", "알아서 해줘",
+        "그냥 써줘", "답 알려줘"
     ]
 
     for word in danger_words:
@@ -183,17 +184,25 @@ if user_input:
     added_score = analyze_dependency(user_input)
     st.session_state.risk_score += added_score
 
+    # -----------------------------------
+    # 과의존 위험도별 반응
+    # -----------------------------------
     if st.session_state.risk_score >= 10:
         st.session_state.warning_count += 1
+
+        # 도마뱀 등장!
+        st.image("lizard.png", caption="🦎 스스로 생각해보세요!", use_container_width=True)
+
         st.warning("""
-🚨 AI 의존도가 높아지고 있습니다.
+🚨 AI 의존도가 너무 높아요!
 
-정답을 바로 얻는 것도 좋지만,
-스스로 사고하는 과정 역시 중요합니다.
+답을 바로 받는 것보다
+스스로 고민하는 과정이 훨씬 중요합니다.
 
-잠시 직접 고민해보는 시간을 가져보세요 🙂
+잠깐, 먼저 혼자 생각해볼까요? 🙂
 """)
-        with st.expander("✍️ 먼저 스스로 생각해보기"):
+
+        with st.expander("✍️ 내 생각 먼저 적어보기"):
             my_thought = st.text_area("당신의 생각을 먼저 적어보세요")
             if my_thought:
                 st.success("좋아요! 스스로 사고하려는 과정이 중요합니다.")
@@ -233,4 +242,13 @@ if user_input:
     except Exception as e:
         ai_text = f"오류 발생: {e}"
 
-    st
+    st.session_state.messages.append({"role": "assistant", "content": ai_text})
+
+    with st.chat_message("assistant"):
+        st.markdown(ai_text)
+
+# -----------------------------------
+# 하단 안내
+# -----------------------------------
+st.markdown("---")
+st.caption("ThinkBack AI · 건강한 AI 활용 습관과 자기주도 학습을 위한 AI 챗봇")
