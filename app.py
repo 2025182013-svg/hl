@@ -53,6 +53,9 @@ col1, col2 = st.sidebar.columns(2)
 col1.metric("총 질문", f"{st.session_state.question_count}개")
 col2.metric("경고 횟수", f"{st.session_state.warning_count}회")
 
+# 디버그: 대화 메시지 수 확인
+st.sidebar.caption(f"🗨️ 저장된 대화 수: {len(st.session_state.messages)}")
+
 if st.session_state.question_lengths:
     avg_len = sum(st.session_state.question_lengths) / len(st.session_state.question_lengths)
     if avg_len < 10:
@@ -103,7 +106,6 @@ def analyze_dependency(text):
     return score
 
 
-# 채팅 기록 출력
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
@@ -150,17 +152,21 @@ if user_input:
 
     try:
         with st.spinner("AI가 답변 생성 중입니다..."):
-            recent_messages = st.session_state.messages[-6:]
+            recent_messages = st.session_state.messages[-10:]
             response = client.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=[
                     {
                         "role": "system",
-                        "content": "학습 도우미. 답을 주되 스스로 생각하도록 짧게 유도."
+                        "content": (
+                            "너는 학습 도우미야. 반드시 이전 대화 내용을 기억하고 맥락에 맞게 답해야 해. "
+                            "정답을 바로 알려주기보다 스스로 생각할 수 있도록 힌트를 주고 유도해. "
+                            "절대 이전 대화를 모른다고 하지 마. 짧고 친절하게 답해."
+                        )
                     },
                     *recent_messages
                 ],
-                max_tokens=200,
+                max_tokens=300,
                 temperature=0.7
             )
             ai_text = response.choices[0].message.content
