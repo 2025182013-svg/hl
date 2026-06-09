@@ -174,7 +174,8 @@ def analyze_dependency(text):
 
 
 def reset_learning_state():
-    st.session_state.risk_score = 0
+    st.session_state.risk_score = 0.0
+    st.session_state.risk_history = []
     st.session_state.warning_count = 0
     st.session_state.question_count = 0
     st.session_state.question_lengths = []
@@ -189,7 +190,10 @@ if "current_chat_id" not in st.session_state:
     st.session_state.current_chat_id = chats[0][0] if chats else create_chat()
 
 if "risk_score" not in st.session_state:
-    st.session_state.risk_score = 0
+    st.session_state.risk_score = 0.0
+
+if "risk_history" not in st.session_state:
+    st.session_state.risk_history = []
 
 if "warning_count" not in st.session_state:
     st.session_state.warning_count = 0
@@ -291,17 +295,22 @@ st.sidebar.markdown("### 📊 AI 의존도")
 score = st.session_state.risk_score
 
 if score < WARNING_SCORE:
-    st.sidebar.success(f"🟢 낮음 · {score}점")
+    st.sidebar.success(f"🟢 낮음 · {score:.1f}점")
 elif score < DANGER_SCORE:
-    st.sidebar.warning(f"🟡 보통 · {score}점")
+    st.sidebar.warning(f"🟡 보통 · {score:.1f}점")
 else:
-    st.sidebar.error(f"🔴 높음 · {score}점")
+    st.sidebar.error(f"🔴 높음 · {score:.1f}점")
 
 st.sidebar.progress(min(score / 20, 1.0))
 
 col1, col2 = st.sidebar.columns(2)
 col1.metric("총 질문", f"{st.session_state.question_count}개")
 col2.metric("경고 횟수", f"{st.session_state.warning_count}회")
+
+if st.session_state.risk_history:
+    st.sidebar.caption(
+        f"최근 3회 위험 점수: {st.session_state.risk_history}"
+    )
 
 if st.session_state.question_lengths:
     avg_len = sum(st.session_state.question_lengths) / len(st.session_state.question_lengths)
@@ -378,7 +387,14 @@ if user_input:
         st.markdown(user_input)
 
     added_score = analyze_dependency(user_input)
-    st.session_state.risk_score += added_score
+
+    st.session_state.risk_history.append(added_score)
+    st.session_state.risk_history = st.session_state.risk_history[-3:]
+
+    st.session_state.risk_score = round(
+        sum(st.session_state.risk_history) / len(st.session_state.risk_history),
+        1
+    )
 
     if st.session_state.risk_score >= DANGER_SCORE:
         st.session_state.show_lizard = True
